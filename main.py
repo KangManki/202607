@@ -3,6 +3,7 @@ import streamlit as st
 from customers import init as init_customers, ui as customers_ui
 from orders import initialize_db as init_orders, ui as orders_ui
 from inventory import initialize_db as init_inventory, ui as inventory_ui
+from products import init as init_products, ui as products_ui
 import auth
 
 
@@ -11,6 +12,7 @@ def initialize_all():
     init_customers()
     init_orders()
     init_inventory()
+    init_products()
     auth.initialize_db()
 
 
@@ -33,7 +35,7 @@ def main():
                 user = auth.authenticate(username.strip(), password)
                 if user:
                     st.session_state['user'] = user
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error('로그인 실패')
         st.sidebar.markdown('---')
@@ -57,9 +59,11 @@ def main():
     user = st.session_state['user']
 
     st.sidebar.write(f"로그인: {user['username']} ({user['role']})")
-    choice = st.sidebar.radio('기능 선택', ['고객관리', '주문관리', '재고관리', '사용자관리' if user['role']=='admin' else ''])
+    choice = st.sidebar.radio('기능 선택', ['고객관리', '상품관리', '주문관리', '재고관리', '사용자관리' if user['role']=='admin' else ''])
     if choice == '고객관리':
         customers_ui()
+    elif choice == '상품관리':
+        products_ui()
     elif choice == '주문관리':
         orders_ui()
     elif choice == '재고관리':

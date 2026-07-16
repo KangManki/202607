@@ -1,111 +1,122 @@
-import sqlite3
-from pathlib import Path
 import pandas as pd
+import mysql.connector
+from db_config import get_db_config
 
-DB_PATH = Path(__file__).parent / "customers.db"
 
 def get_conn():
-	conn = sqlite3.connect(DB_PATH)
-	conn.row_factory = sqlite3.Row
-	return conn
+    config = get_db_config()
+    return mysql.connector.connect(**config)
+
 
 def initialize_db():
-	DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute(
-		"""
-		CREATE TABLE IF NOT EXISTS customers (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			email TEXT,
-			phone TEXT,
-			notes TEXT
-		)
-		"""
-	)
-	conn.commit()
-	conn.close()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS customers (
+                    customer_id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(50) NOT NULL,
+                    email VARCHAR(100) NOT NULL,
+                    phone VARCHAR(20),
+                    create_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def add_customer(name, email=None, phone=None, notes=None):
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute(
-		"INSERT INTO customers (name, email, phone, notes) VALUES (?, ?, ?, ?)",
-		(name, email, phone, notes),
-	)
-	conn.commit()
-	conn.close()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO customers (name, email, phone) VALUES (%s, %s, %s)",
+                (name, email, phone),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def update_customer(customer_id, name, email, phone, notes):
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute(
-		"UPDATE customers SET name=?, email=?, phone=?, notes=? WHERE id=?",
-		(name, email, phone, notes, customer_id),
-	)
-	conn.commit()
-	conn.close()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE customers SET name=%s, email=%s, phone=%s WHERE customer_id=%s",
+                (name, email, phone, customer_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def delete_customer(customer_id):
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute("DELETE FROM customers WHERE id=?", (customer_id,))
-	conn.commit()
-	conn.close()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM customers WHERE customer_id=%s", (customer_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def get_all_customers():
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute("SELECT * FROM customers ORDER BY id DESC")
-	rows = cur.fetchall()
-	conn.close()
-	return [dict(r) for r in rows]
+    conn = get_conn()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("SELECT customer_id AS id, name, email, phone, create_at AS created_at FROM customers ORDER BY customer_id DESC")
+            rows = cur.fetchall()
+        return rows
+    finally:
+        conn.close()
+
 
 def search_customers(query):
-	q = f"%{query}%"
-	conn = get_conn()
-	cur = conn.cursor()
-	cur.execute(
-		"SELECT * FROM customers WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR notes LIKE ? ORDER BY id DESC",
-		(q, q, q, q),
-	)
-	rows = cur.fetchall()
-	conn.close()
-	return [dict(r) for r in rows]
+    q = f"%{query}%"
+    conn = get_conn()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute(
+                "SELECT customer_id AS id, name, email, phone, create_at AS created_at FROM customers WHERE name LIKE %s OR email LIKE %s OR phone LIKE %s ORDER BY customer_id DESC",
+                (q, q, q),
+            )
+            rows = cur.fetchall()
+        return rows
+    finally:
+        conn.close()
+
 
 def import_csv(file_like):
-	# expects a file-like object (uploaded file)
-	df = pd.read_csv(file_like)
-	# normalize columns: name,email,phone,notes
-	cols = [c.lower() for c in df.columns]
-	mapping = {}
-	for col in cols:
-		if 'name' in col:
-			mapping[col] = 'name'
-		elif 'email' in col:
-			mapping[col] = 'email'
-		elif 'phone' in col or 'tel' in col:
-			mapping[col] = 'phone'
-		elif 'note' in col:
-			mapping[col] = 'notes'
-	df = df.rename(columns=mapping)
-	for _, row in df.iterrows():
-		name = row.get('name')
-		if pd.isna(name) or name is None:
-			continue
-		add_customer(
-			str(name),
-			str(row.get('email')) if not pd.isna(row.get('email')) else None,
-			str(row.get('phone')) if not pd.isna(row.get('phone')) else None,
-			str(row.get('notes')) if not pd.isna(row.get('notes')) else None,
-		)
+    df = pd.read_csv(file_like)
+    cols = [c.lower() for c in df.columns]
+    mapping = {}
+    for col in cols:
+        if 'name' in col:
+            mapping[col] = 'name'
+        elif 'email' in col:
+            mapping[col] = 'email'
+        elif 'phone' in col or 'tel' in col:
+            mapping[col] = 'phone'
+        elif 'note' in col:
+            mapping[col] = 'notes'
+    df = df.rename(columns=mapping)
+    for _, row in df.iterrows():
+        name = row.get('name')
+        if pd.isna(name) or name is None:
+            continue
+        add_customer(
+            str(name),
+            str(row.get('email')) if not pd.isna(row.get('email')) else None,
+            str(row.get('phone')) if not pd.isna(row.get('phone')) else None,
+            str(row.get('notes')) if not pd.isna(row.get('notes')) else None,
+        )
+
 
 def export_csv():
-	rows = get_all_customers()
-	df = pd.DataFrame(rows)
-	return df.to_csv(index=False).encode('utf-8')
-
-if __name__ == '__main__':
-	initialize_db()
-	print('customers.db initialized at', DB_PATH)
+    rows = get_all_customers()
+    df = pd.DataFrame(rows)
+    return df.to_csv(index=False).encode('utf-8')

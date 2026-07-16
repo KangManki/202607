@@ -26,7 +26,7 @@ def show_sidebar():
 
 def view_customers():
     st.header('고객 목록')
-    q = st.text_input('검색 (이름/이메일/전화/메모)')
+    q = st.text_input('검색 (이름/이메일/전화)')
     if q:
         rows = search_customers(q)
     else:
@@ -53,10 +53,9 @@ def view_customers():
             name = st.text_input('이름', value=cust.get('name', ''))
             email = st.text_input('이메일', value=cust.get('email', ''))
             phone = st.text_input('전화', value=cust.get('phone', ''))
-            notes = st.text_area('메모', value=cust.get('notes', ''))
             submitted = st.form_submit_button('저장')
             if submitted:
-                update_customer(cust['id'], name, email, phone, notes)
+                update_customer(cust['id'], name, email, phone, None)
                 st.success('수정되었습니다.')
                 del st.session_state['edit']
 
@@ -75,13 +74,12 @@ def add_customer_ui():
         name = st.text_input('이름')
         email = st.text_input('이메일')
         phone = st.text_input('전화')
-        notes = st.text_area('메모')
         submitted = st.form_submit_button('추가')
         if submitted:
             if not name.strip():
                 st.error('이름은 필수입니다.')
             else:
-                add_customer(name.strip(), email.strip() or None, phone.strip() or None, notes.strip() or None)
+                add_customer(name.strip(), email.strip() or None, phone.strip() or None, None)
                 st.success('고객이 추가되었습니다.')
 
 
