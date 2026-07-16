@@ -1,0 +1,3 @@
+id,name,email,phone,notes
+2,홍길동,hong@example.com,,VIP 고객
+1,테스트 고객,test@example.com,010-0000-0000,테스트 메모
